@@ -330,6 +330,7 @@ where
 pub struct QemuEdgeCoverageClassicHelper {
     address_filter: QemuInstrumentationAddressRangeFilter,
     use_hitcounts: bool,
+    use_jit: bool,
 }
 
 #[cfg(emulation_mode = "systemmode")]
@@ -338,23 +339,29 @@ pub struct QemuEdgeCoverageClassicHelper {
     address_filter: QemuInstrumentationAddressRangeFilter,
     paging_filter: QemuInstrumentationPagingFilter,
     use_hitcounts: bool,
+    use_jit: bool,
 }
 
 #[cfg(emulation_mode = "usermode")]
 impl QemuEdgeCoverageClassicHelper {
     #[must_use]
-    pub fn new(address_filter: QemuInstrumentationAddressRangeFilter) -> Self {
+    pub fn new(address_filter: QemuInstrumentationAddressRangeFilter, use_jit: bool) -> Self {
         Self {
             address_filter,
             use_hitcounts: true,
+            use_jit,
         }
     }
 
     #[must_use]
-    pub fn without_hitcounts(address_filter: QemuInstrumentationAddressRangeFilter) -> Self {
+    pub fn without_hitcounts(
+        address_filter: QemuInstrumentationAddressRangeFilter,
+        use_jit: bool,
+    ) -> Self {
         Self {
             address_filter,
             use_hitcounts: false,
+            use_jit,
         }
     }
 
@@ -370,11 +377,13 @@ impl QemuEdgeCoverageClassicHelper {
     pub fn new(
         address_filter: QemuInstrumentationAddressRangeFilter,
         paging_filter: QemuInstrumentationPagingFilter,
+        use_jit: bool,
     ) -> Self {
         Self {
             address_filter,
             paging_filter,
             use_hitcounts: true,
+            use_jit,
         }
     }
 
@@ -382,11 +391,13 @@ impl QemuEdgeCoverageClassicHelper {
     pub fn without_hitcounts(
         address_filter: QemuInstrumentationAddressRangeFilter,
         paging_filter: QemuInstrumentationPagingFilter,
+        use_jit: bool,
     ) -> Self {
         Self {
             address_filter,
             paging_filter,
             use_hitcounts: false,
+            use_jit,
         }
     }
 
@@ -399,7 +410,7 @@ impl QemuEdgeCoverageClassicHelper {
 #[cfg(emulation_mode = "usermode")]
 impl Default for QemuEdgeCoverageClassicHelper {
     fn default() -> Self {
-        Self::new(QemuInstrumentationAddressRangeFilter::None)
+        Self::new(QemuInstrumentationAddressRangeFilter::None, false)
     }
 }
 
@@ -409,6 +420,7 @@ impl Default for QemuEdgeCoverageClassicHelper {
         Self::new(
             QemuInstrumentationAddressRangeFilter::None,
             QemuInstrumentationPagingFilter::None,
+            false,
         )
     }
 }
@@ -448,17 +460,49 @@ where
         QT: QemuHelperTuple<S>,
     {
         if self.use_hitcounts {
-            hooks.blocks(
-                Hook::Function(gen_hashed_block_ids::<QT, S>),
-                Hook::Empty,
-                Hook::Raw(trace_block_transition_hitcount),
-            );
+            if self.use_jit {
+                let hook_id = hooks.blocks(
+                    Hook::Function(gen_hashed_block_ids::<QT, S>),
+                    Hook::Empty,
+                    Hook::Empty,
+                );
+
+                println!("edge hook jit");
+
+                unsafe {
+                    libafl_qemu_sys::libafl_qemu_block_hook_set_jit(
+                        hook_id.0,
+                        Some(libafl_qemu_sys::libafl_jit_trace_block_hitcount),
+                    );
+                }
+            } else {
+                hooks.blocks(
+                    Hook::Function(gen_hashed_block_ids::<QT, S>),
+                    Hook::Empty,
+                    Hook::Raw(trace_block_transition_hitcount),
+                );
+            }
         } else {
-            hooks.blocks(
-                Hook::Function(gen_hashed_block_ids::<QT, S>),
-                Hook::Empty,
-                Hook::Raw(trace_block_transition_single),
-            );
+            if self.use_jit {
+                let hook_id = hooks.blocks(
+                    Hook::Function(gen_hashed_block_ids::<QT, S>),
+                    Hook::Empty,
+                    Hook::Empty,
+                );
+
+                unsafe {
+                    libafl_qemu_sys::libafl_qemu_block_hook_set_jit(
+                        hook_id.0,
+                        Some(libafl_qemu_sys::libafl_jit_trace_block_single),
+                    );
+                }
+            } else {
+                hooks.blocks(
+                    Hook::Function(gen_hashed_block_ids::<QT, S>),
+                    Hook::Empty,
+                    Hook::Raw(trace_block_transition_single),
+                );
+            }
         }
     }
 }
