@@ -133,7 +133,7 @@ jobs:
       run: RUST_BACKTRACE=1 MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
 
   ubuntu-clippy:
-    runs-on: ubuntu-22.04
+    runs-on: self-hosted
     steps:
     - name: Remove Dotnet & Haskell
       run: rm -rf /usr/share/dotnet && rm -rf /opt/ghc
@@ -166,7 +166,7 @@ jobs:
     #  run: cargo +nightly test --features=embed-runtime --manifest-path libafl_libfuzzer/Cargo.toml
 
   ubuntu-check:
-    runs-on: ubuntu-22.04
+    runs-on: self-hosted
     steps:
     - uses: actions-rs/toolchain@v1
       with:
@@ -258,7 +258,7 @@ jobs:
     strategy:
       matrix:
           os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     steps:
     - uses: actions-rs/toolchain@v1
       with:
